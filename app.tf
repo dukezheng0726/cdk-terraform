@@ -49,12 +49,12 @@ resource "aws_launch_template" "EC2LaunchTemplate" {
   image_id               = var.ec2_ami
   instance_type          = var.ec2_instance_type
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
-  user_data = templatefile("${path.module}/userdata.sh.tpl", {
-    db_endpoint = aws_db_instance.appdb.endpoint,
+  user_data = base64encode(templatefile("${path.module}/userdata.sh.tpl", {
+    db_endpoint = aws_db_instance.appdb.address,
     username    = "admin"
     password    = "Metro123456"
     dbname      = "metrodb"
-  })
+  }))
 }
 
 resource "aws_autoscaling_group" "WordpressASG" {
@@ -69,13 +69,13 @@ resource "aws_autoscaling_group" "WordpressASG" {
     version = "$Latest"
   }
   target_group_arns   = [aws_lb_target_group.wordpress_tg.arn]
-  vpc_zone_identifier = [aws_subnet.CustomPrivateSubnet1.id, aws_subnet.CustomPrivateSubnet2.id]
+  vpc_zone_identifier = [aws_subnet.CustomPublicSubnet1.id, aws_subnet.CustomPublicSubnet2.id]
 }
 
 
 
 resource "aws_autoscaling_policy" "wordpress_scaling_policy" {
-  autoscaling_group_name = aws_autoscaling_group.WordpressASG
+  autoscaling_group_name = aws_autoscaling_group.WordpressASG.name
   name                   = "Scaling_Policy"
   policy_type            = "TargetTrackingScaling"
   target_tracking_configuration {

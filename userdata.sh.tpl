@@ -16,7 +16,7 @@
       mv wp-config-sample.php wp-config.php
       sed -i 's/database_name_here/${dbname}/g' wp-config.php
       sed -i 's/username_here/${username}/g' wp-config.php
-      sed -i 's/password_here/#{password}/g' wp-config.php
+      sed -i 's/password_here/${password}/g' wp-config.php
       sed -i 's/localhost/${db_endpoint}/g' wp-config.php
       service httpd start
       chkconfig httpd on
