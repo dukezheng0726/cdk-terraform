@@ -4,7 +4,7 @@ env:
   variables:
     TF_STATE_BUCKET: "yan-terraform"  # S3 bucket for storing Terraform state
     TF_STATE_KEY: "terraform.tfstate"             # State file location in S3
-    TF_REGION: $AWS_REGION                        # AWS Region
+    TF_REGION: ca-central-1                       # AWS Region
     ACTION: "apply"                               # Default action: 'apply' or 'destroy'
 
 phases:
