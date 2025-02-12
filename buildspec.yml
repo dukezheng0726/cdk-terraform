@@ -2,57 +2,51 @@ version: 0.2
 
 env:
   variables:
-    STACK_NAME: "application-stack"
-    TEMPLATE_FILE: "application-cfn.yaml"
-#    PARAMETERS: |
-#                ParameterKey=VpcID,ParameterValue=vpc-063632df62ea1985b ParameterKey=AMIID,ParameterValue=ami-0db18496905e01e3d ParameterKey=SubnetID1,ParameterValue=subnet-08034885b1739ecec ParameterKey=SubnetID2,ParameterValue=subnet-05fd5199c368282c9 ParameterKey=ASGMinValue,ParameterValue=2 ParameterKey=ASGMaxValue,ParameterValue=10
-    PARAMETERS: >
-      ParameterKey=VpcID,ParameterValue=vpc-063632df62ea1985b 
-      ParameterKey=AMIID,ParameterValue=ami-0db18496905e01e3d 
-      ParameterKey=SubnetID1,ParameterValue=subnet-08034885b1739ecec 
-      ParameterKey=SubnetID2,ParameterValue=subnet-05fd5199c368282c9 
-      ParameterKey=ASGMinValue,ParameterValue=2 
-      ParameterKey=ASGMaxValue,ParameterValue=15
+    TF_STATE_BUCKET: "yan-terraform"  # S3 bucket for storing Terraform state
+    TF_STATE_KEY: "terraform.tfstate"             # State file location in S3
+    TF_REGION: $AWS_REGION                        # AWS Region
+    ACTION: "apply"                               # Default action: 'apply' or 'destroy'
 
 phases:
   install:
+    runtime-versions:
+      python: 3.9
     commands:
-      - echo "Installing AWS CLI v2..."
-      - curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-      - unzip awscliv2.zip
-      - sudo ./aws/install --update
-      - aws --version
+      - echo "Installing Terraform on Amazon Linux..."
+      - sudo yum update -y
+      - sudo yum install -y wget unzip
+      - wget https://releases.hashicorp.com/terraform/1.6.0/terraform_1.6.0_linux_amd64.zip
+      - unzip terraform_1.6.0_linux_amd64.zip
+      - sudo mv terraform /usr/local/bin/
+      - terraform --version
 
   pre_build:
     commands:
-      - echo "Checking AWS CLI version..."
-      - aws --version
-      - echo "Validating CloudFormation template..."
-      - aws cloudformation validate-template --template-body file://${TEMPLATE_FILE}
+      - echo "Configuring AWS CLI..."
+      - aws sts get-caller-identity
+      - echo "Initializing Terraform..."
+      - terraform init -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="key=$TF_STATE_KEY" -backend-config="region=$TF_REGION"
+      - terraform validate
 
   build:
     commands:
       - |
-        if [ "$ACTION" == "deploy" ]; then
-          echo "Deploying CloudFormation stack: $STACK_NAME..."
-          echo "${PARAMETERS}" | tr '\n' ' '
-          aws cloudformation deploy \
-          --stack-name $STACK_NAME \
-          --template-file ${TEMPLATE_FILE} \
-          --parameter-overrides $(echo "${PARAMETERS}" | tr '\n' ' ') \
-          --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+        if [ "$ACTION" == "apply" ]; then
+          echo "Running Terraform Plan..."
+          terraform plan -out=tfplan -var="region=$TF_REGION"
+
+          echo "Applying Terraform Changes..."
+          terraform apply -auto-approve tfplan
 
         elif [ "$ACTION" == "destroy" ]; then
-          echo "Destroying CloudFormation stack: $STACK_NAME..."
-          aws cloudformation delete-stack --stack-name $STACK_NAME
-          echo "Waiting for stack deletion to complete..."
-          aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME
-          
+          echo "Destroying Terraform Resources..."
+          terraform destroy -auto-approve -var="region=$TF_REGION"
+
         else
-          echo "Invalid ACTION parameter. Use 'deploy' or 'destroy'."
+          echo "Invalid ACTION parameter. Use 'apply' or 'destroy'."
           exit 1
         fi
 
   post_build:
     commands:
-      - echo "CloudFormation operation ($ACTION) completed successfully."
+      - echo "Terraform operation ($ACTION) completed successfully."
